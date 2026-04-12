@@ -151,6 +151,13 @@ export default function App() {
           <ActionButton label="Phase 5: Install" icon={<Database size={16} />} onClick={() => runPhase("phase5")} disabled={isRunning} />
           <ActionButton label="Phase 6: C2" icon={<Terminal size={16} />} onClick={() => runPhase("phase6")} disabled={isRunning} />
           <ActionButton label="Phase 7: Actions" icon={<Lock size={16} />} onClick={() => runPhase("phase7")} disabled={isRunning} />
+          <ActionButton 
+            label="Resilience Test" 
+            icon={<ShieldAlert size={16} />} 
+            onClick={() => runPhase("resilience-test")} 
+            disabled={isRunning} 
+            className="border-orange-500/50 text-orange-400 hover:bg-orange-500/10"
+          />
           <button 
             onClick={resetSystem}
             className="flex items-center justify-center gap-2 px-4 py-2 border border-zinc-700 hover:bg-zinc-800 text-zinc-400 rounded transition-colors font-mono text-sm"
@@ -555,7 +562,7 @@ function StatusCard({ title, value, icon, color }: { title: string; value: strin
   );
 }
 
-function ActionButton({ label, icon, onClick, disabled }: { label: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean }) {
+function ActionButton({ label, icon, onClick, disabled, className }: { label: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean; className?: string }) {
   return (
     <button
       onClick={onClick}
@@ -564,7 +571,7 @@ function ActionButton({ label, icon, onClick, disabled }: { label: string; icon:
         flex items-center gap-3 px-6 py-3 rounded font-mono text-sm transition-all
         ${disabled 
           ? "bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed" 
-          : "bg-orange-600 hover:bg-orange-500 text-white shadow-lg shadow-orange-900/20 active:scale-95"}
+          : className || "bg-orange-600 hover:bg-orange-500 text-white shadow-lg shadow-orange-900/20 active:scale-95"}
       `}
     >
       {icon} {label}
