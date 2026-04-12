@@ -1,0 +1,5 @@
+{
+  "name": "RuneHall Adversary Emulation",
+  "description": "Autonomous red team agent for vulnerability testing and kill chain execution within the RuneHall ecosystem.",
+  "requestFramePermissions": []
+}
