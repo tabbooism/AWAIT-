@@ -111,6 +111,8 @@ async function startServer() {
         subdomains: [],
         openPorts: [],
         techStack: {},
+        emails: [],
+        gravatarHashes: [],
       },
       weaponization: {
         scripts: [],
@@ -136,37 +138,82 @@ async function startServer() {
   });
 
   app.post("/api/run-phase1", async (req, res) => {
-    addLog("PHASE 1: RECONNAISSANCE - Mapping attack surface...");
+    const { config } = req.body || {};
+    const targets = config?.targets || ["runehall.com", "rh420.xyz"];
+    const depth = config?.depth || 1;
+    const dataPoints = config?.dataPoints || ["subdomains", "ports", "tech", "emails", "gravatar"];
+
+    addLog(`PHASE 1: RECONNAISSANCE - Mapping attack surface for: ${targets.join(", ")}`);
+    addLog(`Config: Depth=${depth}, DataPoints=[${dataPoints.join(", ")}]`);
     
     // Simulate DNS Enumeration
-    addLog("Enumerating subdomains for runehall.com and rh420.xyz...");
-    loot.reconData.subdomains = [
-      { domain: "api.rh420.xyz", ip: "151.0.214.242" },
-      { domain: "wss.runehall.com", ip: "104.21.45.12" },
-      { domain: "staging-admin.rh420.gg", ip: "45.79.181.244" },
-      { domain: "dev.runehall.com", ip: "151.0.214.242" }
-    ];
+    if (dataPoints.includes("subdomains")) {
+      addLog(`Enumerating subdomains (Depth ${depth})...`);
+      loot.reconData.subdomains = [
+        { domain: "api.rh420.xyz", ip: "151.0.214.242" },
+        { domain: "wss.runehall.com", ip: "104.21.45.12" },
+        { domain: "staging-admin.rh420.gg", ip: "45.79.181.244" },
+        { domain: "dev.runehall.com", ip: "151.0.214.242" }
+      ];
+      if (depth > 1) {
+        loot.reconData.subdomains.push(
+          { domain: "internal-v1.rh420.xyz", ip: "10.0.0.5" },
+          { domain: "backup-node.runehall.com", ip: "10.0.0.12" }
+        );
+        addLog("Deep crawl discovered 2 internal subdomains.");
+      }
+    }
     
     // Simulate Port Scan
-    addLog("Scanning origin IP: 151.0.214.242...");
-    loot.reconData.openPorts = [
-      { port: 22, service: "ssh", banner: "OpenSSH 8.2p1 Ubuntu" },
-      { port: 80, service: "http", banner: "nginx/1.18.0" },
-      { port: 443, service: "https", banner: "nginx/1.18.0" },
-      { port: 3306, service: "mysql", banner: "5.7.33-0ubuntu0.20.04.1" },
-      { port: 6379, service: "redis", banner: "Redis server v=6.0.6" }
-    ];
+    if (dataPoints.includes("ports")) {
+      addLog("Scanning origin IP: 151.0.214.242...");
+      loot.reconData.openPorts = [
+        { port: 22, service: "ssh", banner: "OpenSSH 8.2p1 Ubuntu" },
+        { port: 80, service: "http", banner: "nginx/1.18.0" },
+        { port: 443, service: "https", banner: "nginx/1.18.0" },
+        { port: 3306, service: "mysql", banner: "5.7.33-0ubuntu0.20.04.1" },
+        { port: 6379, service: "redis", banner: "Redis server v=6.0.6" }
+      ];
+    }
 
     // Simulate Tech Stack Fingerprinting
-    loot.reconData.techStack = {
-      backend: "Laravel 8.x",
-      frontend: "Vue.js 3.x",
-      server: "Nginx / Cloudflare",
-      database: "MySQL / Redis"
-    };
-    addLog("Technology stack fingerprinted: Laravel/Vue.js/Nginx.");
+    if (dataPoints.includes("tech")) {
+      loot.reconData.techStack = {
+        backend: "Laravel 8.x",
+        frontend: "Vue.js 3.x",
+        server: "Nginx / Cloudflare",
+        database: "MySQL / Redis"
+      };
+      addLog("Technology stack fingerprinted: Laravel/Vue.js/Nginx.");
+    }
 
-    await exfiltrateToDiscord("PHASE 1: RECONNAISSANCE", loot.reconData);
+    // Simulate Email Scraping
+    if (dataPoints.includes("emails")) {
+      addLog("Scraping for user emails in public directories and leaked databases...");
+      loot.reconData.emails = [
+        "admin@runehall.com",
+        "support@rh420.xyz",
+        "dev-ops@runehall.io",
+        "murkingmurk@aol.com"
+      ];
+      if (depth > 1) {
+        loot.reconData.emails.push("billing@rh420.gg", "security@runehall.com");
+      }
+    }
+
+    // Simulate Gravatar Hash Extraction
+    if (dataPoints.includes("gravatar")) {
+      addLog("Extracting Gravatar hashes from user profiles...");
+      loot.reconData.gravatarHashes = [
+        { user: "admin", hash: "e64c7d89f26bd1972efa831d13d568b2" },
+        { user: "murk", hash: "8d6f5f8a9a8f8a8f8a8f8a8f8a8f8a8f" }
+      ];
+    }
+
+    await exfiltrateToDiscord("PHASE 1: RECONNAISSANCE", {
+      config,
+      results: loot.reconData
+    });
 
     res.json({ status: "complete", loot });
   });

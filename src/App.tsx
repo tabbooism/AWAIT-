@@ -42,6 +42,8 @@ interface Loot {
     subdomains: { domain: string; ip: string }[];
     openPorts: { port: number; service: string; banner: string }[];
     techStack: Record<string, string>;
+    emails?: string[];
+    gravatarHashes?: { user: string; hash: string }[];
   };
   weaponization: {
     scripts: { name: string; type: string; target: string }[];
@@ -68,6 +70,11 @@ export default function App() {
   const [logs, setLogs] = useState<string[]>([]);
   const [loot, setLoot] = useState<Loot | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [reconConfig, setReconConfig] = useState({
+    targets: "runehall.com, rh420.xyz",
+    depth: 1,
+    dataPoints: ["subdomains", "ports", "tech", "emails", "gravatar"]
+  });
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -107,7 +114,18 @@ export default function App() {
   const runPhase = async (phase: string) => {
     setIsRunning(true);
     try {
-      await fetch(`/api/run-${phase}`, { method: "POST" });
+      const body: any = {};
+      if (phase === "phase1") {
+        body.config = {
+          ...reconConfig,
+          targets: reconConfig.targets.split(",").map(t => t.trim())
+        };
+      }
+      await fetch(`/api/run-${phase}`, { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
     } catch (e) {
       console.error(`Failed to run ${phase}`, e);
     }
@@ -142,7 +160,57 @@ export default function App() {
       />
       
       <div className="col-span-full bg-zinc-900/50 border border-zinc-800 rounded-lg p-6">
-        <h3 className="text-zinc-400 font-mono text-xs uppercase tracking-widest mb-4">Kill Chain Execution</h3>
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+          <div>
+            <h3 className="text-zinc-400 font-mono text-xs uppercase tracking-widest mb-1">Kill Chain Execution</h3>
+            <p className="text-[10px] text-zinc-600 font-mono">Execute sequential phases of the cyber kill chain.</p>
+          </div>
+          
+          {/* Recon Config */}
+          <div className="bg-zinc-950/50 border border-zinc-800/50 p-3 rounded flex flex-wrap gap-4 items-center">
+            <div className="flex flex-col gap-1">
+              <label className="text-[9px] text-zinc-500 uppercase font-mono">Targets (comma separated)</label>
+              <input 
+                type="text" 
+                value={reconConfig.targets}
+                onChange={(e) => setReconConfig({...reconConfig, targets: e.target.value})}
+                className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-[10px] px-2 py-1 rounded w-48 focus:outline-none focus:border-orange-500/50"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[9px] text-zinc-500 uppercase font-mono">Crawl Depth</label>
+              <select 
+                value={reconConfig.depth}
+                onChange={(e) => setReconConfig({...reconConfig, depth: parseInt(e.target.value)})}
+                className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-[10px] px-2 py-1 rounded focus:outline-none focus:border-orange-500/50"
+              >
+                <option value={1}>1 (Surface)</option>
+                <option value={2}>2 (Deep)</option>
+                <option value={3}>3 (Exhaustive)</option>
+              </select>
+            </div>
+            <div className="flex gap-3">
+              {["subdomains", "ports", "tech", "emails", "gravatar"].map(dp => (
+                <label key={dp} className="flex items-center gap-2 cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    checked={reconConfig.dataPoints.includes(dp)}
+                    onChange={(e) => {
+                      const newDP = e.target.checked 
+                        ? [...reconConfig.dataPoints, dp]
+                        : reconConfig.dataPoints.filter(d => d !== dp);
+                      setReconConfig({...reconConfig, dataPoints: newDP});
+                    }}
+                    className="sr-only"
+                  />
+                  <div className={`w-3 h-3 border rounded-sm transition-colors ${reconConfig.dataPoints.includes(dp) ? "bg-orange-500 border-orange-500" : "border-zinc-700 group-hover:border-zinc-500"}`} />
+                  <span className="text-[10px] text-zinc-400 capitalize font-mono">{dp}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <ActionButton label="Phase 1: Recon" icon={<Search size={16} />} onClick={() => runPhase("phase1")} disabled={isRunning} />
           <ActionButton label="Phase 2: Weaponize" icon={<Zap size={16} />} onClick={() => runPhase("phase2")} disabled={isRunning} />
@@ -199,6 +267,31 @@ export default function App() {
               ))}
             </div>
           </div>
+          {loot?.reconData.emails && (
+            <div className="bg-zinc-900/50 border border-zinc-800 p-4 rounded">
+              <h4 className="text-[10px] text-zinc-500 uppercase mb-2">Scraped Emails</h4>
+              <div className="space-y-1">
+                {loot.reconData.emails.map((email, i) => (
+                  <div key={i} className="text-xs font-mono text-zinc-300">
+                    {email}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {loot?.reconData.gravatarHashes && (
+            <div className="bg-zinc-900/50 border border-zinc-800 p-4 rounded">
+              <h4 className="text-[10px] text-zinc-500 uppercase mb-2">Gravatar Hashes</h4>
+              <div className="space-y-1">
+                {loot.reconData.gravatarHashes.map((g, i) => (
+                  <div key={i} className="flex justify-between font-mono text-xs">
+                    <span className="text-orange-500">{g.user}</span>
+                    <span className="text-zinc-600 text-[10px]">{g.hash}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
