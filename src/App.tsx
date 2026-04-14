@@ -118,14 +118,15 @@ export default function App() {
 
   const runPhase = async (phase: string) => {
     // Phases that require confirmation
-    const sensitivePhases = ["phase4", "phase7", "resilience-test", "vuln-scan", "grafana-scan"];
+    const sensitivePhases = ["phase4", "phase7", "resilience-test", "vuln-scan", "grafana-scan", "redis-rce"];
     if (sensitivePhases.includes(phase) && !confirmAction) {
       const labels: Record<string, string> = {
         "phase4": "Execute Exploitation Payloads",
         "phase7": "Finalize Actions on Objectives (Exfiltration)",
         "resilience-test": "Run Advanced Resilience Test",
         "vuln-scan": "Initiate Vulnerability Scan",
-        "grafana-scan": "Initiate Grafana Credential Exfiltration"
+        "grafana-scan": "Initiate Grafana Credential Exfiltration",
+        "redis-rce": "Execute Redis RCE Exploitation"
       };
       setConfirmAction({ phase, label: labels[phase] || phase });
       return;
@@ -260,6 +261,13 @@ export default function App() {
             onClick={() => runPhase("grafana-scan")} 
             disabled={isRunning} 
             className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
+          />
+          <ActionButton 
+            label="Redis RCE" 
+            icon={<Zap size={16} />} 
+            onClick={() => runPhase("redis-rce")} 
+            disabled={isRunning} 
+            className="border-red-500/50 text-red-400 hover:bg-red-500/10"
           />
           <button 
             onClick={resetSystem}
