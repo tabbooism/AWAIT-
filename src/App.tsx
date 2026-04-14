@@ -118,13 +118,14 @@ export default function App() {
 
   const runPhase = async (phase: string) => {
     // Phases that require confirmation
-    const sensitivePhases = ["phase4", "phase7", "resilience-test", "vuln-scan"];
+    const sensitivePhases = ["phase4", "phase7", "resilience-test", "vuln-scan", "grafana-scan"];
     if (sensitivePhases.includes(phase) && !confirmAction) {
       const labels: Record<string, string> = {
         "phase4": "Execute Exploitation Payloads",
         "phase7": "Finalize Actions on Objectives (Exfiltration)",
         "resilience-test": "Run Advanced Resilience Test",
-        "vuln-scan": "Initiate Vulnerability Scan"
+        "vuln-scan": "Initiate Vulnerability Scan",
+        "grafana-scan": "Initiate Grafana Credential Exfiltration"
       };
       setConfirmAction({ phase, label: labels[phase] || phase });
       return;
@@ -252,6 +253,13 @@ export default function App() {
             onClick={() => runPhase("vuln-scan")} 
             disabled={isRunning} 
             className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+          />
+          <ActionButton 
+            label="Grafana Scan" 
+            icon={<Database size={16} />} 
+            onClick={() => runPhase("grafana-scan")} 
+            disabled={isRunning} 
+            className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
           />
           <button 
             onClick={resetSystem}
