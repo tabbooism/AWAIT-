@@ -77,25 +77,30 @@ export default function App() {
   });
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ phase: string; label: string } | null>(null);
+  const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const fetchLogs = async () => {
     try {
       const res = await fetch("/api/logs");
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setLogs(data);
+      setErrorStatus(null);
     } catch (e) {
-      console.error("Failed to fetch logs", e);
+      setErrorStatus("Connection Lost");
     }
   };
 
   const fetchLoot = async () => {
     try {
       const res = await fetch("/api/loot");
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setLoot(data);
     } catch (e) {
-      console.error("Failed to fetch loot", e);
+      // Silently fail loot fetch if connection is down
     }
   };
 
@@ -112,7 +117,21 @@ export default function App() {
   }, [logs]);
 
   const runPhase = async (phase: string) => {
+    // Phases that require confirmation
+    const sensitivePhases = ["phase4", "phase7", "resilience-test", "vuln-scan"];
+    if (sensitivePhases.includes(phase) && !confirmAction) {
+      const labels: Record<string, string> = {
+        "phase4": "Execute Exploitation Payloads",
+        "phase7": "Finalize Actions on Objectives (Exfiltration)",
+        "resilience-test": "Run Advanced Resilience Test",
+        "vuln-scan": "Initiate Vulnerability Scan"
+      };
+      setConfirmAction({ phase, label: labels[phase] || phase });
+      return;
+    }
+
     setIsRunning(true);
+    setConfirmAction(null);
     try {
       const body: any = {};
       if (phase === "phase1") {
@@ -121,11 +140,12 @@ export default function App() {
           targets: reconConfig.targets.split(",").map(t => t.trim())
         };
       }
-      await fetch(`/api/run-${phase}`, { 
+      const res = await fetch(`/api/run-${phase}`, { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
+      if (!res.ok) throw new Error(`Failed to execute ${phase}`);
     } catch (e) {
       console.error(`Failed to run ${phase}`, e);
     }
@@ -226,6 +246,13 @@ export default function App() {
             disabled={isRunning} 
             className="border-orange-500/50 text-orange-400 hover:bg-orange-500/10"
           />
+          <ActionButton 
+            label="Vuln Scan" 
+            icon={<Search size={16} />} 
+            onClick={() => runPhase("vuln-scan")} 
+            disabled={isRunning} 
+            className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+          />
           <button 
             onClick={resetSystem}
             className="flex items-center justify-center gap-2 px-4 py-2 border border-zinc-700 hover:bg-zinc-800 text-zinc-400 rounded transition-colors font-mono text-sm"
@@ -267,6 +294,22 @@ export default function App() {
               ))}
             </div>
           </div>
+          {loot?.credentials.grafana && loot.credentials.grafana.length > 0 && (
+            <div className="bg-zinc-900/50 border border-zinc-800 p-4 rounded col-span-full">
+              <h4 className="text-[10px] text-zinc-500 uppercase mb-2">Grafana Credentials</h4>
+              <div className="space-y-2">
+                {loot.credentials.grafana.map((g, i) => (
+                  <div key={i} className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 bg-zinc-950 rounded border border-zinc-800/50 font-mono text-xs">
+                    <span className="text-blue-400">{g.source}</span>
+                    <div className="flex gap-4 mt-1 sm:mt-0">
+                      <span className="text-zinc-500">USER: <span className="text-zinc-300">{g.user}</span></span>
+                      <span className="text-zinc-500">PASS: <span className="text-zinc-300">{g.pass}</span></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {loot?.reconData.emails && (
             <div className="bg-zinc-900/50 border border-zinc-800 p-4 rounded">
               <h4 className="text-[10px] text-zinc-500 uppercase mb-2">Scraped Emails</h4>
@@ -444,8 +487,8 @@ export default function App() {
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-2 md:px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full">
-            <div className={`w-2 h-2 rounded-full ${isRunning ? "bg-green-500 animate-pulse" : "bg-zinc-600"}`} />
-            <span className="text-[10px] md:text-xs font-mono text-zinc-400 uppercase">{isRunning ? "ACTIVE" : "STANDBY"}</span>
+            <div className={`w-2 h-2 rounded-full ${errorStatus ? "bg-red-500" : isRunning ? "bg-green-500 animate-pulse" : "bg-zinc-600"}`} />
+            <span className="text-[10px] md:text-xs font-mono text-zinc-400 uppercase">{errorStatus || (isRunning ? "ACTIVE" : "STANDBY")}</span>
           </div>
         </div>
       </header>
@@ -605,6 +648,49 @@ export default function App() {
           label="Loot" 
         />
       </div>
+
+      <AnimatePresence>
+        {confirmAction && (
+          <div className="fixed inset-0 flex items-center justify-center z-[100] p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setConfirmAction(null)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-zinc-900 border border-zinc-800 p-6 rounded-lg max-w-md w-full shadow-2xl"
+            >
+              <div className="flex items-center gap-3 mb-4 text-orange-500">
+                <AlertTriangle size={24} />
+                <h3 className="text-lg font-bold font-mono uppercase tracking-tight">Confirm Operation</h3>
+              </div>
+              <p className="text-zinc-400 text-sm mb-6 font-mono">
+                You are about to initiate: <span className="text-zinc-100 font-bold">{confirmAction.label}</span>. 
+                This action may have irreversible effects on the target environment and trigger defensive alerts.
+              </p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => runPhase(confirmAction.phase)}
+                  className="flex-1 bg-orange-600 hover:bg-orange-500 text-white font-mono py-2 rounded text-sm transition-colors"
+                >
+                  PROCEED
+                </button>
+                <button 
+                  onClick={() => setConfirmAction(null)}
+                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-mono py-2 rounded text-sm transition-colors"
+                >
+                  CANCEL
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
