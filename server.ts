@@ -30,7 +30,8 @@ async function startServer() {
     vulnerabilities: [],
     credentials: {
       grafana: [],
-      db: null
+      db: null,
+      ssh: []
     },
     contractFindings: [],
     reconData: {
@@ -115,7 +116,8 @@ async function startServer() {
       vulnerabilities: [],
       credentials: {
         grafana: [],
-        db: null
+        db: null,
+        ssh: []
       },
       contractFindings: [],
       reconData: {
@@ -288,7 +290,22 @@ async function startServer() {
     loot.credentials.db = { user: "rh420_user", pass: "rh420_prod_!992", status: "CONNECTED" };
     loot.vulnerabilities.push("Exposed Database Credentials");
 
-    addLog("Exploitation complete. Data exfiltrated, WebSocket hijacked.");
+    // SSH Credential Harvesting
+    addLog("Searching for persistent SSH credentials on discovered hosts...");
+    const sshHosts = loot.reconData.subdomains.map((s: any) => s.ip).concat("151.0.214.242");
+    for (const host of [...new Set(sshHosts)]) {
+      addLog(`Probing ${host} for weak configurations and leaked keys...`);
+      // Simulate finding credentials based on host patterns
+      if (host === "151.0.214.242") {
+        loot.credentials.ssh.push({ host, user: "admin", pass: "admin123", type: "Password" });
+        addLog(`[SUCCESS] Harvested SSH credentials for ${host}: admin:admin123`);
+      } else if (host === "45.79.181.244") {
+        loot.credentials.ssh.push({ host, user: "rh-staging", key: "RSA-PRIVATE-KEY-2024", type: "Leaked Mesh Key" });
+        addLog(`[SUCCESS] Recovered leaked SSH key for ${host}: rh-staging`);
+      }
+    }
+
+    addLog("Exploitation complete. Data exfiltrated, WebSocket hijacked, SSH credentials harvested.");
     
     await exfiltrateToDiscord("PHASE 4: EXPLOITATION", { 
       vulnerabilities: loot.vulnerabilities, 

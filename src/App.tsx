@@ -417,6 +417,23 @@ export default function App() {
               </div>
             </div>
           )}
+          {loot?.credentials.ssh && loot.credentials.ssh.length > 0 && (
+            <div className="bg-zinc-900/50 border border-zinc-800 p-4 rounded col-span-full">
+              <h4 className="text-[10px] text-zinc-500 uppercase mb-2">SSH Credentials</h4>
+              <div className="space-y-2">
+                {loot.credentials.ssh.map((s, i) => (
+                  <div key={i} className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 bg-zinc-950 rounded border border-zinc-800/50 font-mono text-xs">
+                    <span className="text-red-400">{s.host}</span>
+                    <div className="flex gap-4 mt-1 sm:mt-0">
+                      <span className="text-zinc-500">TYPE: <span className="text-red-500/80 uppercase">{s.type}</span></span>
+                      <span className="text-zinc-500">USER: <span className="text-zinc-300">{s.user}</span></span>
+                      <span className="text-zinc-500">{s.pass ? "PASS" : "KEY"}: <span className="text-zinc-300">{s.pass || s.key}</span></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {loot?.reconData.emails && (
             <div className="bg-zinc-900/50 border border-zinc-800 p-4 rounded">
               <h4 className="text-[10px] text-zinc-500 uppercase mb-2">Scraped Emails</h4>
